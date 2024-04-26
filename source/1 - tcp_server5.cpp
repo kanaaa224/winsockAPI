@@ -1,4 +1,8 @@
-﻿#include <winsock2.h>
+﻿/*
+	setsockopt()を利用してソケットに対してSO_REUSEADDRを設定すると、TIME_WAIT状態のポートが存在していてもbindができるようになる
+*/
+
+#include <winsock2.h>
 
 int main() {
 	WSADATA wsaData;

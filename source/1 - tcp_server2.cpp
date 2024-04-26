@@ -1,4 +1,8 @@
-﻿#include <winsock2.h>
+﻿/*
+	何回もクライアントと接続できるサーバー
+*/
+
+#include <winsock2.h>
 
 int main() {
 	WSADATA wsaData;

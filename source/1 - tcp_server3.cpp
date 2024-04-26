@@ -1,4 +1,8 @@
-﻿#include <stdio.h>
+﻿/*
+	何回もクライアントと接続できるサーバー（エラー処理付）
+*/
+
+#include <stdio.h>
 #include <winsock2.h>
 
 int main() {

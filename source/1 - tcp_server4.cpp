@@ -1,4 +1,8 @@
-﻿#include <stdio.h>
+﻿/*
+	acceptした相手を表示するサーバー
+*/
+
+#include <stdio.h>
 #include <winsock2.h>
 #include <Ws2tcpip.h>
 
