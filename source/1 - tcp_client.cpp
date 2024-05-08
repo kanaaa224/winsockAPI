@@ -31,7 +31,7 @@ int main() {
 
 	printf("%d, %s\n", n, buf);
 
-	// winsock2の終了処理
+	// winsock2の終了
 	WSACleanup();
 
 	return 0;

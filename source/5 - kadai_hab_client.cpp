@@ -1,13 +1,10 @@
 ﻿/*
-	コンソールウィンドウで"256"などの数字(数字は10000未満の整数"unsigned int")もしくは"*"や"#"などの記号を入力
-	入力された文字列をサーバー側に送る
+	ヒットアンドブローゲーム - クライアント
 */
 
 #include <stdio.h>
 #include <winsock2.h>
 #include <Ws2tcpip.h>
-//#pragma comment( lib, "ws2_32.lib" )
-//#include "windows.h"
 #include <tchar.h>
 
 int main() {

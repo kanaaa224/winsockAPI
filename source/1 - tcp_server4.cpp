@@ -31,7 +31,7 @@ int main() {
 		len = sizeof(client);
 		sock = accept(sock0, (struct sockaddr *)&client, &len);
 
-		printf("accepted connection from %s, port=%d\n", inet_ntop(AF_INET, &client.sin_addr, s, sizeof s)/*inet_ntoa(client.sin_addr)*/, ntohs(client.sin_port));
+		printf("accepted connection. from: %s, port: %d\n", inet_ntop(AF_INET, &client.sin_addr, s, sizeof s)/*inet_ntoa(client.sin_addr)*/, ntohs(client.sin_port));
 
 		send(sock, "HELLO", 5, 0);
 

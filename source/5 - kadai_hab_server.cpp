@@ -1,6 +1,6 @@
 ﻿/*
-	クライアントから送られた文字列を判断してサーバー側コンソールで表示する（「文字列：数字」、「文字列：記号」、「文字列：終了コード」）
-	サーバー側は終了コードを受けるまでは何度も受付できる状態にし、終了コードは"#"
+	ヒットアンドブローゲーム - サーバー
+	終了コード: "#"
 */
 
 #include <stdio.h>
@@ -8,6 +8,19 @@
 #include <regex>
 #include <winsock2.h>
 #include <Ws2tcpip.h>
+
+// ヒットアンドブローゲームの出題値
+std::vector<char> hitAndBlowValues;
+
+// ヒットアンドブローゲームで値をチェック
+std::vector<int> hitAndBlowCheck() {
+	//
+}
+
+// ヒットアンドブローゲームを開始
+bool hitAndBlowGame() {
+	//
+}
 
 int main() {
 	WSADATA wsaData;
