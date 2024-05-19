@@ -10,16 +10,18 @@
 #include <Ws2tcpip.h>
 
 // ヒットアンドブローゲームの出題値
-std::vector<char> hitAndBlowValues;
+std::vector<std::string> hitAndBlowValues;
 
 // ヒットアンドブローゲームで値をチェック
-std::vector<int> hitAndBlowCheck() {
-	//
-}
+//std::vector<int> hitAndBlowCheck() {
+//	//
+//}
 
 // ヒットアンドブローゲームを開始
-bool hitAndBlowGame() {
-	//
+bool hitAndBlowGame(int length = 3) {
+	hitAndBlowValues = { "1", "2", "3" };
+	std::cout << "HitAndBlow の文字列: " << hitAndBlowValues[0] << hitAndBlowValues[1] << std::endl;
+	return true;
 }
 
 int main() {
@@ -37,7 +39,7 @@ int main() {
 	// ソケットの作成
 	socketA = socket(AF_INET, SOCK_STREAM, 0);
 	if (socketA == INVALID_SOCKET) {
-		printf("error_socket: %d\n", WSAGetLastError());
+		std::cout << "error_socket: " << WSAGetLastError() << std::endl;
 		return -1;
 	}
 
@@ -47,20 +49,23 @@ int main() {
 	addr.sin_addr.S_un.S_addr = INADDR_ANY;
 
 	if (bind(socketA, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
-		printf("error_bind: %d\n", WSAGetLastError());
+		std::cout << "error_bind: " << WSAGetLastError() << std::endl;
 		return -1;
 	}
 
 	if (listen(socketA, 5) != 0) {
-		printf("error_listen: %d\n", WSAGetLastError());
+		std::cout << "error_listen: " << WSAGetLastError() << std::endl;
 		return -1;
 	}
+
+	// HitAndBlow ゲームを開始
+	if (!hitAndBlowGame()) return false;
 
 	while (1) {
 		int length = sizeof(client);
 		socketB = accept(socketA, (struct sockaddr*)&client, &length);
 		if (socketB == INVALID_SOCKET) {
-			printf("error_accept: %d\n", WSAGetLastError());
+			std::cout << "error_accept: " << WSAGetLastError() << std::endl;
 			break;
 		}
 
@@ -68,22 +73,22 @@ int main() {
 		char buffer[] = "connected server: 3 - kadai_server.cpp";
 		int n = send(socketB, buffer, sizeof(buffer), 0);
 		if (n < 1) {
-			printf("error_send: %d\n", WSAGetLastError());
+			std::cout << "error_send: " << WSAGetLastError() << std::endl;
 			return -1;
 		}
 		char psb[sizeof "255.255.255.255"];
-		printf("accepted connection. from: %s, port: %d\n", inet_ntop(AF_INET, &client.sin_addr, psb, sizeof psb), ntohs(client.sin_port));
+		std::cout << "accepted connection. from: " << inet_ntop(AF_INET, &client.sin_addr, psb, sizeof psb) << ", port: " << ntohs(client.sin_port) << std::endl;
 
 		// クライアント側から受信したデータを表示
 		memset(buffer, 0, sizeof(buffer));
 		n = recv(socketB, buffer, sizeof(buffer), 0);
 		if (n < 1) {
-			printf("error_recv: %d\n", WSAGetLastError());
+			std::cout << "error_recv: " << WSAGetLastError() << std::endl;
 		}
 		else {
 			// 接続、受信成功
 
-			if (buffer[0] == '#') {
+			/*if (buffer[0] == '#') {
 				printf("文字列: 終了コード\n");
 			}
 			else {
@@ -107,10 +112,8 @@ int main() {
 				else {
 					printf("文字列: その他（複数の文字種）\n");
 				}
-			}
+			}*/
 		}
-
-		printf("\n");
 
 		closesocket(socketB);
 	}
