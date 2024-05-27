@@ -95,17 +95,19 @@ int main() {
 	SOCKET socketA;
 	SOCKET socketB;
 	struct sockaddr_in sockaddrA;
-	struct sockaddr_in client;
+	struct sockaddr_in sockaddrB;
 
 	// winsock2の初期化
 	if (WSAStartup(MAKEWORD(2, 0), &wsaData) != 0) {
+		std::cout << getDateTime() << " | " << "[winsock2 API] error_wsaStartup: " << WSAGetLastError() << std::endl;
 		return -1;
 	}
 
 	// ソケットの作成
 	socketA = socket(AF_INET, SOCK_STREAM, 0);
 	if (socketA == INVALID_SOCKET) {
-		std::cout << getDateTime() << " | [ winsock2 API ] error_socket: " << WSAGetLastError() << std::endl;
+		std::cout << getDateTime() << " | " << "[ winsock2 API ] error_socket: " << WSAGetLastError() << std::endl;
+		WSACleanup();
 		return -1;
 	}
 
@@ -115,93 +117,104 @@ int main() {
 	sockaddrA.sin_addr.S_un.S_addr = INADDR_ANY;
 
 	if (bind(socketA, (struct sockaddr*)&sockaddrA, sizeof(sockaddrA)) != 0) {
-		std::cout << getDateTime() << " | [ winsock2 API ] error_bind: " << WSAGetLastError() << std::endl;
+		std::cout << getDateTime() << " | " << "[ winsock2 API ] error_bind: " << WSAGetLastError() << std::endl;
+		WSACleanup();
 		return -1;
 	}
 
 	if (listen(socketA, 5) != 0) {
-		std::cout << getDateTime() << " | [ winsock2 API ] error_listen: " << WSAGetLastError() << std::endl;
+		std::cout << getDateTime() << " | " << "[ winsock2 API ] error_listen: " << WSAGetLastError() << std::endl;
+		WSACleanup();
 		return -1;
 	}
 
 	// HitAndBlow ゲームを開始
 	if (!hitAndBlowGame()) return false;
 
-	std::cout << getDateTime() << " | [ HIT AND BLOW ] 出題値: ";
+	std::cout << getDateTime() << " | " << "[ HIT AND BLOW ] 出題値: ";
 	for (int i = 0; i < hitAndBlowValues.size(); i++) {
 		std::cout << hitAndBlowValues[i];
 	}
 	std::cout << std::endl;
 
 	while (true) {
-		int length = sizeof(client);
-		socketB = accept(socketA, (struct sockaddr*)&client, &length);
+		int length = sizeof(sockaddrB);
+		socketB = accept(socketA, (struct sockaddr*)&sockaddrB, &length);
 		if (socketB == INVALID_SOCKET) {
-			std::cout << getDateTime() << " | [ winsock2 API ] error_accept: " << WSAGetLastError() << std::endl;
-			break;
+			std::cout << getDateTime() << " | " << "[ winsock2 API ] error_accept: " << WSAGetLastError() << std::endl;
+			continue;
 		}
 
 		// 接続成功
 		char psb[sizeof "255.255.255.255"];
-		std::cout << getDateTime() << " | [ winsock2 API ] accepted connection - from: " << inet_ntop(AF_INET, &client.sin_addr, psb, sizeof psb) << ", port: " << ntohs(client.sin_port) << std::endl;
+		std::cout << getDateTime() << " | " << "[ winsock2 API ] 接続を許可しました - from: " << inet_ntop(AF_INET, &sockaddrB.sin_addr, psb, sizeof psb) << ", port: " << ntohs(sockaddrB.sin_port) << std::endl;
 
 		// 接続してきたクライアントへサーバーの名前を返す
 		char buffer[] = "3 - kadai_server.cpp";
 		int n = send(socketB, buffer, sizeof(buffer), 0);
 		if (n < 1) {
-			std::cout << getDateTime() << " | [ winsock2 API ] error_send: " << WSAGetLastError() << std::endl;
-			return -1;
+			std::cout << getDateTime() << " | " << "[ winsock2 API ] error_send: " << WSAGetLastError() << std::endl;
+			closesocket(socketB);
+			continue;
 		}
 
-		// クライアント側から受信したデータを表示
-		memset(buffer, 0, sizeof(buffer));
-		n = recv(socketB, buffer, sizeof(buffer), 0);
-		if (n < 1) {
-			std::cout << getDateTime() << " | [ winsock2 API ] error_recv: " << WSAGetLastError() << std::endl;
-			break;
-		}
-		else {
-			// 受信成功
-
-			if (buffer[0] == '#') {
-				printf("文字列: 終了コード\n");
+		while (true) {
+			// クライアント側から受信したデータを表示
+			memset(buffer, 0, sizeof(buffer));
+			n = recv(socketB, buffer, sizeof(buffer), 0);
+			if (n < 1) {
+				std::cout << getDateTime() << " | " << "[ winsock2 API ] error_recv: " << WSAGetLastError() << std::endl;
+				break;
 			}
-			else {
-				std::string str = buffer;
+			
+			// 受信成功
+			buffer[n] = '\0'; // 文字列終端を追加
 
-				std::regex pattern_symbol("^[!-/:-@\[-`{-~]+$");
-				std::regex pattern_alpha("^[a-zA-Z]+$");
-				std::regex pattern_digit("^[0-9]+$");
+			std::string str = buffer;
 
-				std::smatch sm;
+			std::regex pattern_digit("^[0-9]+$");
+			std::smatch sm;
 
-				/* if (std::regex_match(str, sm, pattern_symbol) && !std::regex_match(str, sm, pattern_alpha) && !std::regex_match(str, sm, pattern_digit)) {
-					printf("文字列: 記号\n");
-				}
-				else if (std::regex_match(str, sm, pattern_digit) && !std::regex_match(str, sm, pattern_symbol) && !std::regex_match(str, sm, pattern_alpha)) {
-					printf("文字列: 数値\n");
-				}
-				else if (std::regex_match(str, sm, pattern_alpha) && !std::regex_match(str, sm, pattern_symbol) && !std::regex_match(str, sm, pattern_digit)) {
-					printf("文字列: アルファベット\n");
-				}
-				else {
-					printf("文字列: その他（複数の文字種）\n");
-				} */
-
-				if (std::regex_match(str, sm, pattern_digit) && !std::regex_match(str, sm, pattern_symbol) && !std::regex_match(str, sm, pattern_alpha)) {
-					std::vector<int> playerValues = { buffer[0], buffer[1], buffer[2] };
+			if (std::regex_match(str, sm, pattern_digit)) {
+				if (str.length() >= 3) {
+					std::vector<int> playerValues;
+					for (char c : str) {
+						playerValues.push_back(c - '0');
+					}
 					std::vector<int> result = hitAndBlowCheck(playerValues);
 
-					std::cout << getDateTime() << " | [ HIT AND BLOW ] プレイヤー " << inet_ntop(AF_INET, &client.sin_addr, psb, sizeof psb) << " による回答: " << buffer[0] << buffer[1] << buffer[2] << " (Hits: " << result[0] << ", Blows: " << result[1] << ")" << std::endl;
+					std::cout << getDateTime() << " | " << "[ HIT AND BLOW ] プレイヤー " << inet_ntop(AF_INET, &sockaddrB.sin_addr, psb, sizeof psb) << ":" << ntohs(sockaddrB.sin_port) << " による回答: " << buffer << " (Hits: " << result[0] << ", Blows: " << result[1] << ")" << std::endl;
+
+					std::string response = "Hits: " + std::to_string(result[0]) + ", Blows: " + std::to_string(result[1]);
+					send(socketB, response.c_str(), response.size(), 0);
+					if (n < 1) {
+						std::cout << getDateTime() << " | " << "[ winsock2 API ] error_send: " << WSAGetLastError() << std::endl;
+						continue;
+					}
 				}
 			}
 		}
+
+		closesocket(socketB);
 	}
 
-	closesocket(socketB);
+	closesocket(socketA);
 
 	// winsock2の終了
 	WSACleanup();
 
 	return 0;
 }
+
+/* if (std::regex_match(str, sm, pattern_symbol) && !std::regex_match(str, sm, pattern_alpha) && !std::regex_match(str, sm, pattern_digit)) {
+	printf("文字列: 記号\n");
+}
+else if (std::regex_match(str, sm, pattern_digit) && !std::regex_match(str, sm, pattern_symbol) && !std::regex_match(str, sm, pattern_alpha)) {
+	printf("文字列: 数値\n");
+}
+else if (std::regex_match(str, sm, pattern_alpha) && !std::regex_match(str, sm, pattern_symbol) && !std::regex_match(str, sm, pattern_digit)) {
+	printf("文字列: アルファベット\n");
+}
+else {
+	printf("文字列: その他（複数の文字種）\n");
+} */
