@@ -15,6 +15,8 @@
 #include <winsock2.h>
 #include <Ws2tcpip.h>
 
+#include "json.hpp"
+
 // ヒットアンドブローゲームの出題値
 std::vector<int> hitAndBlowValues;
 
@@ -97,35 +99,80 @@ int main() {
 	struct sockaddr_in sockaddrA;
 	struct sockaddr_in sockaddrB;
 
-	// winsock2の初期化
-	if (WSAStartup(MAKEWORD(2, 0), &wsaData) != 0) {
-		std::cout << getDateTime() << " | " << "[winsock2 API] error_wsaStartup: " << WSAGetLastError() << std::endl;
-		return -1;
-	}
+	int state = 1;
 
-	// ソケットの作成
-	socketA = socket(AF_INET, SOCK_STREAM, 0);
-	if (socketA == INVALID_SOCKET) {
-		std::cout << getDateTime() << " | " << "[ winsock2 API ] error_socket: " << WSAGetLastError() << std::endl;
-		WSACleanup();
-		return -1;
-	}
+	std::cout << getDateTime()         << " | " << "ヒットアンドブローゲーム - サーバー" << std::endl;
+	std::cout << "                   " << " | " << "サーバーへ接続してゲームを開始します。" << std::endl;
 
-	// 接続先指定用構造体の準備
-	sockaddrA.sin_family = AF_INET;
-	sockaddrA.sin_port = htons(12345);
-	sockaddrA.sin_addr.S_un.S_addr = INADDR_ANY;
+	while (state > 0) {
+		switch (state) {
+			
+			// 起動ステート
+			case 1: {
+				// winsock2の初期化
+				if (WSAStartup(MAKEWORD(2, 0), &wsaData) != 0) {
+					std::cout << getDateTime() << " | " << "[ winsock2 API ] error: wsaStartup - " << WSAGetLastError() << std::endl;
+					return -1;
+				}
 
-	if (bind(socketA, (struct sockaddr*)&sockaddrA, sizeof(sockaddrA)) != 0) {
-		std::cout << getDateTime() << " | " << "[ winsock2 API ] error_bind: " << WSAGetLastError() << std::endl;
-		WSACleanup();
-		return -1;
-	}
+				// ソケットの作成
+				socketA = socket(AF_INET, SOCK_STREAM, 0);
+				if (socketA == INVALID_SOCKET) {
+					std::cout << getDateTime() << " | " << "[ winsock2 API ] error: socket - " << WSAGetLastError() << std::endl;
+					WSACleanup();
+					return -1;
+				}
 
-	if (listen(socketA, 5) != 0) {
-		std::cout << getDateTime() << " | " << "[ winsock2 API ] error_listen: " << WSAGetLastError() << std::endl;
-		WSACleanup();
-		return -1;
+				// 接続先指定用構造体の準備
+				sockaddrA.sin_family = AF_INET;
+				sockaddrA.sin_port = htons(12345);
+				sockaddrA.sin_addr.S_un.S_addr = INADDR_ANY;
+
+				// ローカルアドレスをソケットに関連付け
+				if (bind(socketA, (struct sockaddr*)&sockaddrA, sizeof(sockaddrA)) != 0) {
+					std::cout << getDateTime() << " | " << "[ winsock2 API ] error: bind - " << WSAGetLastError() << std::endl;
+					WSACleanup();
+					return -1;
+				}
+
+				// 受信接続をリッスンしている状態でソケットを配置
+				if (listen(socketA, 5) != 0) {
+					std::cout << getDateTime() << " | " << "[ winsock2 API ] error: listen - " << WSAGetLastError() << std::endl;
+					WSACleanup();
+					return -1;
+				}
+
+				state = 2; // 接続ステートへ
+
+				break;
+			}
+
+			// 接続ステート
+			case 2: {
+
+				int length = sizeof(sockaddrB);
+				socketB = accept(socketA, (struct sockaddr*)&sockaddrB, &length);
+				if (socketB == INVALID_SOCKET) {
+					std::cout << getDateTime() << " | " << "[ winsock2 API ] error: accept - " << WSAGetLastError() << std::endl;
+					continue;
+				}
+
+				// 接続成功
+				char psb[sizeof "255.255.255.255"];
+				std::cout << getDateTime() << " | " << "[ winsock2 API ] 接続を許可しました - from: " << inet_ntop(AF_INET, &sockaddrB.sin_addr, psb, sizeof psb) << ", port: " << ntohs(sockaddrB.sin_port) << std::endl;
+
+				// 接続してきたクライアントへサーバーの名前を返す
+				char buffer[] = "3 - kadai_server.cpp";
+				int n = send(socketB, buffer, sizeof(buffer), 0);
+				if (n < 1) {
+					std::cout << getDateTime() << " | " << "[ winsock2 API ] error_send: " << WSAGetLastError() << std::endl;
+					closesocket(socketB);
+					continue;
+				}
+
+				break;
+			}
+		}
 	}
 
 	// HitAndBlow ゲームを開始
@@ -138,28 +185,11 @@ int main() {
 	std::cout << std::endl;
 
 	while (true) {
-		int length = sizeof(sockaddrB);
-		socketB = accept(socketA, (struct sockaddr*)&sockaddrB, &length);
-		if (socketB == INVALID_SOCKET) {
-			std::cout << getDateTime() << " | " << "[ winsock2 API ] error_accept: " << WSAGetLastError() << std::endl;
-			continue;
-		}
-
-		// 接続成功
-		char psb[sizeof "255.255.255.255"];
-		std::cout << getDateTime() << " | " << "[ winsock2 API ] 接続を許可しました - from: " << inet_ntop(AF_INET, &sockaddrB.sin_addr, psb, sizeof psb) << ", port: " << ntohs(sockaddrB.sin_port) << std::endl;
-
-		// 接続してきたクライアントへサーバーの名前を返す
-		char buffer[] = "3 - kadai_server.cpp";
-		int n = send(socketB, buffer, sizeof(buffer), 0);
-		if (n < 1) {
-			std::cout << getDateTime() << " | " << "[ winsock2 API ] error_send: " << WSAGetLastError() << std::endl;
-			closesocket(socketB);
-			continue;
-		}
+		
 
 		while (true) {
 			// クライアント側から受信したデータを表示
+			char buffer[] = "";
 			memset(buffer, 0, sizeof(buffer));
 			n = recv(socketB, buffer, sizeof(buffer), 0);
 			if (n < 1) {
