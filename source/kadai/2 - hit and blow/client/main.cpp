@@ -8,6 +8,7 @@
 #include <iostream>
 #include <regex>
 #include <random>
+#include <unordered_set>
 #include <chrono>
 #include <iomanip>
 #include <sstream>
@@ -16,10 +17,10 @@
 #include <winsock2.h>
 #include <Ws2tcpip.h>
 
-#include "json.hpp" // jsonを使用可能にする
-
 #define DEFAULT_ADDRESS "127.0.0.1"
 #define DEFAULT_PORT    12345
+
+#define HAB_LENGTH 3 // ヒットアンドブローゲームの出題の桁数
 
 std::string getDateTime() {
 	auto now       = std::chrono::system_clock::now();
@@ -93,8 +94,6 @@ int main() {
 
 				// サーバーに接続
 				if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) <= SOCKET_ERROR) {
-					// 接続失敗時
-
 					std::cout << getDateTime() << " | " << "[ winsock2 API ] error: connect - " << WSAGetLastError() << std::endl;
 
 					closesocket(sock);
@@ -121,8 +120,6 @@ int main() {
 					}
 				}
 				else {
-					// 接続成功時
-
 					// サーバーからのデータを受信
 					std::string buffer(100, '\0');
 					int ret = recv(sock, &buffer[0], buffer.size() - 1, 0);
@@ -161,7 +158,7 @@ int main() {
 					else if (ret > 0) { // 受信成功
 						buffer.resize(ret); // 実際に受信したサイズに調整
 
-						std::cout << getDateTime() << " | " << "サーバーに接続しました。 - serverName: " << buffer << std::endl;
+						std::cout << getDateTime() << " | " << "サーバーに接続しました。( serverName: " << buffer << " )" << std::endl;
 
 						state = 3; // ゲームステートへ
 					}
@@ -174,21 +171,21 @@ int main() {
 			case 3: {
 				int gameMode = 0; // 回答モード
 				int num      = 0; // 回答回数
-				int length   = 3; // 回答必要桁数 
 
 				std::vector<std::string> inputs; // 入力記録
-				std::vector<int> blows;          // blow数の記録
 				std::vector<int> hits;           // hit数の記録
+				std::vector<int> blows;          // blow数の記録
 
 				std::cout << getDateTime()         << " | " << "[ HIT AND BLOW ] ゲームを開始します。" << std::endl;
-				std::cout << "                   " << " | " << "[ HIT AND BLOW ] # を入力すると接続を切断しゲームを終了します。" << std::endl;
+				std::cout << "                   " << " | " << "[ HIT AND BLOW ] #  を入力すると接続を切断しゲームを終了します。" << std::endl;
+				std::cout << "                   " << " | " << "[ HIT AND BLOW ] ## を入力すると接続を切断しゲームを終了してサーバーに停止するよう指示します。" << std::endl;
 
 				// ゲーム開始
 				while (true) {
-					std::string input; // 入力（回答）
+					std::string input;
 
-					int blow = 0;
 					int hit  = 0;
+					int blow = 0;
 
 					// 回答モード選択
 					while (gameMode <= 0) {
@@ -205,7 +202,7 @@ int main() {
 							gameMode = 2; // 自動回答モード
 							break;
 						}
-						else if (input == "#") {
+						else if (input == "#" || input == "##") {
 							std::cout << getDateTime() << " | " << "[ HIT AND BLOW ] ゲームを終了します。" << std::endl;
 							break;
 						}
@@ -219,107 +216,115 @@ int main() {
 					if (gameMode == 1) {
 						while (true) {
 							// 文字入力
-							std::cout << getDateTime() << " | " << "[ HIT AND BLOW ] 回答を入力 ( 3桁の数値 / #: 終了): ";
+							std::cout << getDateTime() << " | " << "[ HIT AND BLOW ] 回答を入力 ( 3桁の数値 / #: 終了 ): ";
 							std::getline(std::cin, input);
 
-							std::regex pattern_symbol("^[!-/:-@\[-`{-~]+$");
-							std::regex pattern_alpha("^[a-zA-Z]+$");
-							std::regex pattern_digit("^[0-9]+$");
+							std::regex pattern_symbol("^[!-/:-@\[-`{-~]+$"); // 記号の正規表現
+							std::regex pattern_alpha("^[a-zA-Z]+$");         // 英字の正規表現
+							std::regex pattern_digit("^[0-9]+$");            // 数値の正規表現
 							std::smatch sm;
 
-							if (input == "#") {
-								std::cout << getDateTime() << " | " << "[ HIT AND BLOW ] ゲームを終了します。" << std::endl;
-								gameMode = 0;
+							if (input.length() == HAB_LENGTH) {
 								break;
 							}
-							else if (input.length() != length) {
+							else if (input == "#" || input == "##") {
+								std::cout << getDateTime() << " | " << "[ HIT AND BLOW ] ゲームを終了します。" << std::endl;
+
+								gameMode = 0;
+
+								break;
+							}
+							else if (input.length() != HAB_LENGTH) {
 								std::cout << getDateTime() << " | " << "[ HIT AND BLOW ] 必要桁数は3桁です。" << std::endl;
+
 								continue;
 							}
 							else if (!(std::regex_match(input, sm, pattern_digit) && !std::regex_match(input, sm, pattern_symbol) && !std::regex_match(input, sm, pattern_alpha))) {
 								std::cout << getDateTime() << " | " << "[ HIT AND BLOW ] 数値でなければなりません。" << std::endl;
+
 								continue;
-							}
-							else if (input.length() == length) {
-								break;
 							}
 						}
 					}
 
 					// 自動回答モード
 					else if (gameMode == 2) {
-						//
+						std::vector<int> hitAndBlowValues;
+
+						std::random_device r{};                        // ランダムデバイス（シード生成器）
+						std::mt19937 gen(r());                         // メルセンヌ・ツイスタ乱数生成器
+						std::uniform_int_distribution<int> dist(0, 9); // 0 - 9 の範囲で生成
+
+						std::unordered_set<int> usedValues; // 使用済みの数字を追跡
+
+						hitAndBlowValues.clear();             // ベクターをクリア（初期化）
+						hitAndBlowValues.reserve(HAB_LENGTH); // 必要な長さ分のメモリを予約
+
+						while (hitAndBlowValues.size() < HAB_LENGTH) {
+							int newValue = dist(gen);
+
+							// 生成された乱数が使用済みでないか確認
+							if (usedValues.find(newValue) == usedValues.end()) {
+								hitAndBlowValues.push_back(newValue);
+								usedValues.insert(newValue);
+							}
+						}
+
+						input = "";
+						for (int i = 0; i < HAB_LENGTH; i++) {
+							input += std::to_string(hitAndBlowValues[i]);
+						}
+
+						std::cout << getDateTime() << " | " << "[ HIT AND BLOW ] 自動回答: " << input << std::endl;
 					}
 
-					// 入力が3桁か、終了コードの場合にサーバーにデータ送信
-					while (input.length() == length || input == "#") {
+					// サーバーに回答を送信
+					if (gameMode && input.length() == HAB_LENGTH) {
 						// サーバーへデータを送信
 						int ret = send(sock, input.c_str(), input.length(), 0);
 						if (ret < 1) {
 							std::cout << getDateTime() << " | " << "[ winsock2 API ] error: send - " << WSAGetLastError() << std::endl;
 							
-							std::cout << getDateTime() << " | " << "データを送信できませんでした。再試行しますか？ ( なんらかのキー: 再試行 / #: 終了 ): ";
+							std::cout << getDateTime() << " | " << "データを送信できませんでした。続行できないためゲームを終了します。" << std::endl;
 
-							std::string inputA;
-							std::getline(std::cin, inputA);
+							input = "#";
 
-							if (inputA == "#") {
-								input = "#";
-								gameMode = 0;
-								break;
-							}
-							else {
-								continue;
-							}
-						}
-						else {
-							break;
+							gameMode = 0;
 						}
 					}
 
-					while (input.length() == length) {
-						// サーバーからの応答を待機
+					// サーバーから Hit と Blow 数を受け取る
+					if (gameMode && input.length() == HAB_LENGTH) {
+						// サーバーからデータ受信
 						std::string buffer(100, '\0');
 						int ret = recv(sock, &buffer[0], buffer.size() - 1, 0);
 						if (ret < 1) {
 							std::cout << getDateTime() << " | " << "[ winsock2 API ] error: recv - " << WSAGetLastError() << std::endl;
 							
-							std::cout << getDateTime() << " | " << "データを受信できませんでした。再試行しますか？ ( なんらかのキー: 再試行 / #: 終了 ): ";
+							std::cout << getDateTime() << " | " << "データを受信できませんでした。続行できないためゲームを終了します。" << std::endl;
 
-							std::string inputA;
-							std::getline(std::cin, inputA);
+							input = "#";
 
-							if (inputA == "#") {
-								input = "#";
-								gameMode = 0;
-								break;
-							}
-							else {
-								continue;
-							}
+							gameMode = 0;
 						}
-						buffer.resize(ret);
+						else {
+							buffer.resize(ret);
 
-						if (buffer.length() > 0) {
+							// Hit と Blow 数を受け取る
+							if (buffer.length() == 2) {
 
-							hit  = buffer[0];
-							blow = buffer[1];
-
-							break;
+								// '1' の ASCII コードから '0' の ASCII コードを引くことで 1 になる
+								hit  = buffer[0] - '0';
+								blow = buffer[1] - '0';
+							}
 						}
 					}
 
-					if (input.length() == length) {
+					// 結果に応じて回答を処理
+					if (gameMode && input.length() == HAB_LENGTH) {
 						num++;
 
-						if (hit == length) {
-							std::cout << getDateTime() << " | " << "[ HIT AND BLOW ] ゲームクリア！ あなたは " << num << " 回目でクリアしました。 ゲームを終了します。" << std::endl;
-
-							state = 4; // 終了確認ステートへ
-
-							break;
-						}
-						else {
+						if (hit != HAB_LENGTH) {
 							std::cout << getDateTime() << " | " << "[ HIT AND BLOW ] " << hit << " HIT, " << blow << " BLOW." << std::endl;
 
 							inputs.push_back(input);
@@ -328,10 +333,22 @@ int main() {
 
 							continue;
 						}
+						else {
+							std::cout << getDateTime() << " | " << "[ HIT AND BLOW ] ゲームクリア！ あなたは " << num << " 回目でクリアしました。 ゲームを終了します。" << std::endl;
+
+							input = "#";
+
+							gameMode = 0;
+						}
 					}
 
-					if (input == "#") {
+					// 入力 # / ## で終了
+					if (input == "#" || input == "##") {
+						// サーバーへデータを送信
+						send(sock, input.c_str(), input.length(), 0);
+
 						state = 4; // 終了確認ステートへ
+
 						break;
 					}
 				}
@@ -341,11 +358,12 @@ int main() {
 
 			// 終了確認ステート
 			case 4: {
-				while (true) {
-					closesocket(sock);
-					WSACleanup();
+				closesocket(sock);
+				WSACleanup();
 
-					std::cout << getDateTime() << " | " << "サーバーとの接続を切断しました。" << std::endl;
+				std::cout << getDateTime() << " | " << "サーバーとの接続を切断しました。" << std::endl;
+
+				while (true) {
 					std::cout << getDateTime() << " | " << "アプリを終了しますか？ (y / n): ";
 
 					std::string input;
@@ -372,7 +390,9 @@ int main() {
 			// 終了ステート
 			case 5: {
 				std::cout << getDateTime() << " | " << "アプリを終了します。" << std::endl;
+
 				state = 0; // ループ終了
+
 				break;
 			}
 
