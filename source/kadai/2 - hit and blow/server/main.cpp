@@ -1,7 +1,8 @@
 ﻿/*
 	ヒットアンドブローゲーム - サーバー
-	終了コード: "#"
 */
+
+#define WIN32_LEAN_AND_MEAN // 不要なヘッダファイルのインクルードを抑止してコンパイル時間を短縮
 
 #include <stdio.h>
 #include <iostream>
@@ -15,7 +16,10 @@
 #include <winsock2.h>
 #include <Ws2tcpip.h>
 
-#include "json.hpp"
+#define DEFAULT_ADDRESS "127.0.0.1"
+#define DEFAULT_PORT    12345
+
+#define HAB_LENGTH 3 // ヒットアンドブローゲームの出題の桁数
 
 // ヒットアンドブローゲームの出題値
 std::vector<int> hitAndBlowValues;
@@ -24,17 +28,19 @@ std::vector<int> hitAndBlowValues;
 bool hitAndBlowGame(int length = 3) {
 	if (length > 10) return false; // 桁数は10桁以内でなければならない
 
-	std::random_device r{};
-	std::mt19937 gen(r());
+	std::random_device r{};                        // ランダムデバイス（シード生成器）
+	std::mt19937 gen(r());                         // メルセンヌ・ツイスタ乱数生成器
 	std::uniform_int_distribution<int> dist(0, 9); // 0 - 9 の範囲で生成
 
 	std::unordered_set<int> usedValues; // 使用済みの数字を追跡
 
-	hitAndBlowValues.clear();
-	hitAndBlowValues.reserve(length);
+	hitAndBlowValues.clear();         // ベクターをクリア（初期化）
+	hitAndBlowValues.reserve(length); // 必要な長さ分のメモリを予約
 
 	while (hitAndBlowValues.size() < length) {
 		int newValue = dist(gen);
+
+		// 生成された乱数が使用済みでないか確認
 		if (usedValues.find(newValue) == usedValues.end()) {
 			hitAndBlowValues.push_back(newValue);
 			usedValues.insert(newValue);
@@ -44,7 +50,7 @@ bool hitAndBlowGame(int length = 3) {
 	return true;
 }
 
-// ヒットアンドブローゲームのプレイヤーの入力値をチェック
+// ヒットアンドブローゲームのプレイヤーの入力値をチェックし、HitとBlow数を返す
 std::vector<int> hitAndBlowCheck(const std::vector<int>& playerValues) {
 	int hits  = 0;
 	int blows = 0;
@@ -93,16 +99,14 @@ std::string getDateTime() {
 }
 
 int main() {
-	WSADATA wsaData;
-	SOCKET socketA;
-	SOCKET socketB;
-	struct sockaddr_in sockaddrA;
-	struct sockaddr_in sockaddrB;
+	WSADATA wsaData;                // Windowsソケットの実装に関する情報
+	SOCKET sock, sock2;             // 特定のトランスポートサービスプロバイダーにバインドされたソケットを作成
+	struct sockaddr_in addr, addr2; // IPアドレスやポート番号の情報を保持
 
 	int state = 1;
 
 	std::cout << getDateTime()         << " | " << "ヒットアンドブローゲーム - サーバー" << std::endl;
-	std::cout << "                   " << " | " << "サーバーへ接続してゲームを開始します。" << std::endl;
+	std::cout << "                   " << " | " << "クライアントと接続して問題を出題します。" << std::endl;
 
 	while (state > 0) {
 		switch (state) {
@@ -112,33 +116,40 @@ int main() {
 				// winsock2の初期化
 				if (WSAStartup(MAKEWORD(2, 0), &wsaData) != 0) {
 					std::cout << getDateTime() << " | " << "[ winsock2 API ] error: wsaStartup - " << WSAGetLastError() << std::endl;
+
 					return -1;
 				}
 
 				// ソケットの作成
-				socketA = socket(AF_INET, SOCK_STREAM, 0);
-				if (socketA == INVALID_SOCKET) {
+				sock = socket(AF_INET, SOCK_STREAM, 0);
+				if (sock == INVALID_SOCKET) {
 					std::cout << getDateTime() << " | " << "[ winsock2 API ] error: socket - " << WSAGetLastError() << std::endl;
+
 					WSACleanup();
+
 					return -1;
 				}
 
 				// 接続先指定用構造体の準備
-				sockaddrA.sin_family = AF_INET;
-				sockaddrA.sin_port = htons(12345);
-				sockaddrA.sin_addr.S_un.S_addr = INADDR_ANY;
+				addr.sin_family           = AF_INET;
+				addr.sin_port             = htons(DEFAULT_PORT);
+				addr.sin_addr.S_un.S_addr = INADDR_ANY;
 
 				// ローカルアドレスをソケットに関連付け
-				if (bind(socketA, (struct sockaddr*)&sockaddrA, sizeof(sockaddrA)) != 0) {
+				if (bind(sock, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
 					std::cout << getDateTime() << " | " << "[ winsock2 API ] error: bind - " << WSAGetLastError() << std::endl;
+
 					WSACleanup();
+
 					return -1;
 				}
 
 				// 受信接続をリッスンしている状態でソケットを配置
-				if (listen(socketA, 5) != 0) {
+				if (listen(sock, 5) != 0) {
 					std::cout << getDateTime() << " | " << "[ winsock2 API ] error: listen - " << WSAGetLastError() << std::endl;
+
 					WSACleanup();
+
 					return -1;
 				}
 
@@ -150,101 +161,142 @@ int main() {
 			// 接続ステート
 			case 2: {
 
-				int length = sizeof(sockaddrB);
-				socketB = accept(socketA, (struct sockaddr*)&sockaddrB, &length);
-				if (socketB == INVALID_SOCKET) {
+				std::cout << getDateTime() << " | " << "接続を待機しています..." << std::endl;
+
+				// 接続を待機し、許可する
+				int length = sizeof(addr2);
+				sock2 = accept(sock, (struct sockaddr*)&addr2, &length);
+				if (sock2 == INVALID_SOCKET) {
 					std::cout << getDateTime() << " | " << "[ winsock2 API ] error: accept - " << WSAGetLastError() << std::endl;
-					continue;
+
+					std::cout << getDateTime() << " | " << "接続の許可に失敗しました。もう一度接続を待機します。" << std::endl;
+
+					break;
 				}
 
-				// 接続成功
 				char psb[sizeof "255.255.255.255"];
-				std::cout << getDateTime() << " | " << "[ winsock2 API ] 接続を許可しました - from: " << inet_ntop(AF_INET, &sockaddrB.sin_addr, psb, sizeof psb) << ", port: " << ntohs(sockaddrB.sin_port) << std::endl;
+				std::cout << getDateTime() << " | " << "接続を許可しました。( from: " << inet_ntop(AF_INET, &addr2.sin_addr, psb, sizeof psb) << ", port: " << ntohs(addr2.sin_port) << " )" << std::endl;
 
 				// 接続してきたクライアントへサーバーの名前を返す
-				char buffer[] = "3 - kadai_server.cpp";
-				int n = send(socketB, buffer, sizeof(buffer), 0);
-				if (n < 1) {
-					std::cout << getDateTime() << " | " << "[ winsock2 API ] error_send: " << WSAGetLastError() << std::endl;
-					closesocket(socketB);
-					continue;
+				std::string response = "HITANDBLOW_SERVER";
+				int ret = send(sock2, response.c_str(), response.length(), 0);
+				if (ret < 1) {
+					std::cout << getDateTime() << " | " << "[ winsock2 API ] error: send - " << WSAGetLastError() << std::endl;
+
+					std::cout << getDateTime() << " | " << "接続を許可したクライアントへデータの送信に失敗しました。もう一度接続を待機します。" << std::endl;
+
+					closesocket(sock2);
+
+					break;
+				}
+				else {
+					state = 3; // ゲームステートへ
 				}
 
 				break;
 			}
-		}
-	}
 
-	// HitAndBlow ゲームを開始
-	if (!hitAndBlowGame()) return false;
+			// ゲームステート
+			case 3: {
+				// ヒットアンドブローゲームを開始
+				if (!hitAndBlowGame(HAB_LENGTH)) return -1;
 
-	std::cout << getDateTime() << " | " << "[ HIT AND BLOW ] 出題値: ";
-	for (int i = 0; i < hitAndBlowValues.size(); i++) {
-		std::cout << hitAndBlowValues[i];
-	}
-	std::cout << std::endl;
+				std::cout << getDateTime() << " | " << "[ HIT AND BLOW ] 出題値: ";
+				for (int i = 0; i < hitAndBlowValues.size(); i++) {
+					std::cout << hitAndBlowValues[i];
+				}
+				std::cout << std::endl;
 
-	while (true) {
-		
+				while (true) {
+					// クライアントからデータの受信
+					std::string buffer(100, '\0');
+					int ret = recv(sock2, &buffer[0], buffer.size() - 1, 0);
+					if (ret < 1) {
+						std::cout << getDateTime() << " | " << "[ winsock2 API ] error: recv - " << WSAGetLastError() << std::endl;
 
-		while (true) {
-			// クライアント側から受信したデータを表示
-			char buffer[] = "";
-			memset(buffer, 0, sizeof(buffer));
-			n = recv(socketB, buffer, sizeof(buffer), 0);
-			if (n < 1) {
-				std::cout << getDateTime() << " | " << "[ winsock2 API ] error_recv: " << WSAGetLastError() << std::endl;
-				break;
-			}
-			
-			// 受信成功
-			buffer[n] = '\0'; // 文字列終端を追加
+						std::cout << getDateTime() << " | " << "データを受信できませんでした。接続を切断してもう一度接続を待機します。" << std::endl;
 
-			std::string str = buffer;
+						state = 2; // 接続ステートへ
 
-			std::regex pattern_digit("^[0-9]+$");
-			std::smatch sm;
-
-			if (std::regex_match(str, sm, pattern_digit)) {
-				if (str.length() >= 3) {
-					std::vector<int> playerValues;
-					for (char c : str) {
-						playerValues.push_back(c - '0');
+						break;
 					}
-					std::vector<int> result = hitAndBlowCheck(playerValues);
+					buffer.resize(ret);
 
-					std::cout << getDateTime() << " | " << "[ HIT AND BLOW ] プレイヤー " << inet_ntop(AF_INET, &sockaddrB.sin_addr, psb, sizeof psb) << ":" << ntohs(sockaddrB.sin_port) << " による回答: " << buffer << " (Hits: " << result[0] << ", Blows: " << result[1] << ")" << std::endl;
+					// クライアントが終了した場合、ソケットをクローズし接続待機する
+					if (buffer == "#") {
+						char psb[sizeof "255.255.255.255"];
+						std::cout << getDateTime() << " | " << "[ HIT AND BLOW ] プレイヤー " << inet_ntop(AF_INET, &addr2.sin_addr, psb, sizeof psb) << ":" << ntohs(addr2.sin_port) << " がゲームを終了しました。" << std::endl;
+						std::cout << getDateTime() << " | " << "接続を切断してもう一度接続を待機します。" << std::endl;
 
-					std::string response = "Hits: " + std::to_string(result[0]) + ", Blows: " + std::to_string(result[1]);
-					send(socketB, response.c_str(), response.size(), 0);
-					if (n < 1) {
-						std::cout << getDateTime() << " | " << "[ winsock2 API ] error_send: " << WSAGetLastError() << std::endl;
-						continue;
+						state = 2; // 接続ステートへ
+
+						break;
+					}
+
+					if (buffer == "##") {
+						char psb[sizeof "255.255.255.255"];
+						std::cout << getDateTime() << " | " << "[ HIT AND BLOW ] プレイヤー " << inet_ntop(AF_INET, &addr2.sin_addr, psb, sizeof psb) << ":" << ntohs(addr2.sin_port) << " がゲームを終了し、サーバーの終了も指示しました。" << std::endl;
+						std::cout << getDateTime() << " | " << "接続を切断します。" << std::endl;
+
+						state = 4; // 終了ステートへ
+
+						break;
+					}
+
+					std::regex pattern_symbol("^[!-/:-@\[-`{-~]+$"); // 記号の正規表現
+					std::regex pattern_alpha("^[a-zA-Z]+$");         // 英字の正規表現
+					std::regex pattern_digit("^[0-9]+$");            // 数値の正規表現
+					std::smatch sm;
+
+					// 3桁で数値のみの受信データの場合、HitとBlow数を計算して結果を送信する
+					if (buffer.length() == HAB_LENGTH && std::regex_match(buffer, sm, pattern_digit) && !std::regex_match(buffer, sm, pattern_symbol) && !std::regex_match(buffer, sm, pattern_alpha)) {
+						// HitとBlow数を計算
+						std::vector<int> playerValues;
+						for (char c : buffer) {
+							playerValues.push_back(c - '0'); // '0'のASCIIコードを引いてintに変換
+						}
+						std::vector<int> result = hitAndBlowCheck(playerValues);
+
+						char psb[sizeof "255.255.255.255"];
+						std::cout << getDateTime() << " | " << "[ HIT AND BLOW ] プレイヤー " << inet_ntop(AF_INET, &addr2.sin_addr, psb, sizeof psb) << ":" << ntohs(addr2.sin_port) << " による回答: " << buffer << " (Hits: " << result[0] << ", Blows: " << result[1] << ")" << std::endl;
+
+						// クライアントへ結果を送信
+						std::string response = std::to_string(result[0]) + std::to_string(result[1]); // Hit / Blow 数
+						int ret = send(sock2, response.c_str(), response.size(), 0);
+						if (ret < 1) {
+							std::cout << getDateTime() << " | " << "[ winsock2 API ] error: send - " << WSAGetLastError() << std::endl;
+
+							std::cout << getDateTime() << " | " << "データを受信できませんでした。接続を切断してもう一度接続を待機します。" << std::endl;
+
+							state = 2; // 接続ステートへ
+
+							break;
+						}
 					}
 				}
+
+				closesocket(sock2);
+
+				break;
+			}
+
+			// 終了ステート
+			case 4: {
+				closesocket(sock);
+				WSACleanup();
+
+				std::cout << getDateTime() << " | " << "アプリを終了します。" << std::endl;
+
+				state = 0; // ループ終了
+
+				break;
+			}
+
+			default: {
+				return -1;
 			}
 		}
-
-		closesocket(socketB);
 	}
-
-	closesocket(socketA);
-
-	// winsock2の終了
-	WSACleanup();
 
 	return 0;
 }
-
-/* if (std::regex_match(str, sm, pattern_symbol) && !std::regex_match(str, sm, pattern_alpha) && !std::regex_match(str, sm, pattern_digit)) {
-	printf("文字列: 記号\n");
-}
-else if (std::regex_match(str, sm, pattern_digit) && !std::regex_match(str, sm, pattern_symbol) && !std::regex_match(str, sm, pattern_alpha)) {
-	printf("文字列: 数値\n");
-}
-else if (std::regex_match(str, sm, pattern_alpha) && !std::regex_match(str, sm, pattern_symbol) && !std::regex_match(str, sm, pattern_digit)) {
-	printf("文字列: アルファベット\n");
-}
-else {
-	printf("文字列: その他（複数の文字種）\n");
-} */
