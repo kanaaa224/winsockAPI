@@ -106,7 +106,7 @@ int main() {
 	int state = 1;
 
 	std::cout << getDateTime()         << " | " << "ヒットアンドブローゲーム - サーバー" << std::endl;
-	std::cout << "                   " << " | " << "クライアントと接続して問題を出題します。" << std::endl;
+	std::cout << "                   " << " | " << "クライアントと接続して問題を出題し、回答を処理します。" << std::endl;
 
 	while (state > 0) {
 		switch (state) {
@@ -258,7 +258,7 @@ int main() {
 						std::vector<int> result = hitAndBlowCheck(playerValues);
 
 						char psb[sizeof "255.255.255.255"];
-						std::cout << getDateTime() << " | " << "[ HIT AND BLOW ] プレイヤー " << inet_ntop(AF_INET, &addr2.sin_addr, psb, sizeof psb) << ":" << ntohs(addr2.sin_port) << " による回答: " << buffer << " (Hits: " << result[0] << ", Blows: " << result[1] << ")" << std::endl;
+						std::cout << getDateTime() << " | " << "[ HIT AND BLOW ] プレイヤー " << inet_ntop(AF_INET, &addr2.sin_addr, psb, sizeof psb) << ":" << ntohs(addr2.sin_port) << " による回答: " << buffer << " ( Hit: " << result[0] << ", Blow: " << result[1] << " )" << std::endl;
 
 						// クライアントへ結果を送信
 						std::string response = std::to_string(result[0]) + std::to_string(result[1]); // Hit / Blow 数
